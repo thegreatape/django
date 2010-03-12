@@ -834,8 +834,11 @@ class BaseQuery(object):
         Returns the table name with FORCE INDEX and the appropriate index
         name if force_index has been set.
         """
-        if self.extra_force_index and table in self.extra_force_index:
-                table = "%s FORCE INDEX (%s)" % (self.extra_force_index[table])
+        table_name = re.sub(',?\s*`\s*', '', table)
+        if self.extra_force_index:
+            index = self.extra_force_index.get(table_name)
+            if index:
+                table = "%s FORCE INDEX (%s)" % (table, self.connection.ops.quote_name(index))
         return table
 
     def get_from_clause(self):
@@ -874,7 +877,7 @@ class BaseQuery(object):
                            qn2(col)))
             else:
                 connector = not first and ', ' or ''
-                result.append('%s%s%s' % (connector, qn(name), alias_str))
+                result.append(idx('%s%s%s' % (connector, qn(name), alias_str)))
             first = False
         for t in self.extra_tables:
             alias, unused = self.table_alias(t)
