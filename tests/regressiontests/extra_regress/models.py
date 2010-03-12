@@ -1,6 +1,7 @@
 import copy
 import datetime
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.query import Q
@@ -208,3 +209,15 @@ True
 [<TestObject: TestObject: first,second,third>]
 
 """}
+
+# if settings.DATABASE_ENGINE == "mysql":
+#     __test__["API_TESTS"] += """
+
+# >>> from django.db import connection
+# >>> connection.cursor().execute("create index test_index on extra_regress_testobject(first)")
+# 1L
+# >>> TestObject.objects.all().extra(force_index={'extra_regress_testobject': 'test_index'}).query.as_sql()
+# ('SELECT `extra_regress_testobject`.`id`, `extra_regress_testobject`.`first`, `extra_regress_testobject`.`second`, `extra_regress_testobject`.`third` FROM `extra_regress_testobject` FORCE INDEX (`test_index`)', ())
+
+# """
+

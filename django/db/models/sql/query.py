@@ -91,6 +91,7 @@ class BaseQuery(object):
         self.extra = SortedDict()  # Maps col_alias -> (col_sql, params).
         self.extra_select_mask = None
         self._extra_select_cache = None
+        self.extra_force_index = {}
 
         self.extra_tables = ()
         self.extra_where = ()
@@ -232,6 +233,7 @@ class BaseQuery(object):
             obj._extra_select_cache = None
         else:
             obj._extra_select_cache = self._extra_select_cache.copy()
+        obj.extra_force_index = self.extra_force_index 
         obj.extra_tables = self.extra_tables
         obj.extra_where = self.extra_where
         obj.extra_params = self.extra_params
@@ -827,6 +829,15 @@ class BaseQuery(object):
                     col_aliases.add(field.column)
         return result, aliases
 
+    def get_force_index(self, table):
+        """
+        Returns the table name with FORCE INDEX and the appropriate index
+        name if force_index has been set.
+        """
+        if self.extra_force_index and table in self.extra_force_index:
+                table = "%s FORCE INDEX (%s)" % (self.extra_force_index[table])
+        return table
+
     def get_from_clause(self):
         """
         Returns a list of strings that are joined together to go after the
@@ -841,6 +852,7 @@ class BaseQuery(object):
         result = []
         qn = self.quote_name_unless_alias
         qn2 = self.connection.ops.quote_name
+        idx = self.get_force_index
         first = True
         for alias in self.tables:
             if not self.alias_refcount[alias]:
@@ -853,9 +865,13 @@ class BaseQuery(object):
                 continue
             alias_str = (alias != name and ' %s' % alias or '')
             if join_type and not first:
-                result.append('%s %s%s ON (%s.%s = %s.%s)'
-                        % (join_type, qn(name), alias_str, qn(lhs),
-                           qn2(lhs_col), qn(alias), qn2(col)))
+                result.append('%s %s ON (%s.%s = %s.%s)'
+                        % (join_type,
+                           idx("%s%s" % (qn(name), alias_str)),
+                           qn(lhs),
+                           qn2(lhs_col),
+                           qn(alias),
+                           qn2(col)))
             else:
                 connector = not first and ', ' or ''
                 result.append('%s%s%s' % (connector, qn(name), alias_str))
@@ -867,7 +883,7 @@ class BaseQuery(object):
             # this is the only reference.
             if alias not in self.alias_map or self.alias_refcount[alias] == 1:
                 connector = not first and ', ' or ''
-                result.append('%s%s' % (connector, qn(alias)))
+                result.append(idx('%s%s' % (connector, qn(alias))))
                 first = False
         return result, []
 
@@ -2157,7 +2173,7 @@ class BaseQuery(object):
         self.related_select_cols = []
         self.related_select_fields = []
 
-    def add_extra(self, select, select_params, where, params, tables, order_by):
+    def add_extra(self, select, select_params, where, params, tables, order_by, force_index):
         """
         Adds data to the various extra_* attributes for user-created additions
         to the query.
@@ -2190,6 +2206,8 @@ class BaseQuery(object):
             self.extra_tables += tuple(tables)
         if order_by:
             self.extra_order_by = order_by
+        if force_index:
+            self.extra_force_index = force_index
 
     def clear_deferred_loading(self):
         """
